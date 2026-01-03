@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Doctor Prescription → QR</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { color: #0f172a; }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    input {
+      padding: 10px;
+      width: 260px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 15px;
+    }
+    button {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button.ghost {
+      background: #e5e7eb;
+      color: #111;
+    }
+    #preview {
+      margin-top: 10px;
+      font-style: italic;
+      color: #444;
+    }
+    #qr-box {
+      margin-top: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Doctor Prescription → QR</h1>
+
+<div class="row">
+  <input id="patient-email" type="email" placeholder="Patient Email" />
+  <input id="medicine-input" type="text" placeholder="Medicines (e.g. Paracetamol10 Crocin5)" />
+</div>
+
+<div class="row">
+  <button onclick="startRecording()">Start Voice</button>
+  <button onclick="stopRecording()">Stop Voice</button>
+  <button onclick="sendPrescription()">Send to Patient</button>
+  <button onclick="clearAll()" class="ghost">Clear</button>
+</div>
+
+<div id="preview">
+  Preview: <span id="preview-text"></span>
+</div>
+
+<div id="qr-box">
+  <canvas id="qr-code" width="260" height="260"></canvas>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const API_URL = "http://localhost:5000/api/doctor/create-prescription";
+
+/* =============== VOICE =================== */
+let recognition;
+let voiceText = "";
+
+function startRecording() {
+  voiceText = "";
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Speech recognition not supported");
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.continuous = true;
+  recognition.start();
+
+  recognition.onresult = e => {
+    const spoken = e.results[e.results.length - 1][0].transcript;
+    voiceText += " " + spoken;
+    updatePreview();
+  };
+}
+
+function stopRecording() {
+  if (recognition) recognition.stop();
+}
+
+/* =============== HELPERS ================= */
+
+function updatePreview() {
+  const manual = document.getElementById("medicine-input").value.trim();
+  document.getElementById("preview-text").textContent = voiceText || manual;
+}
+
+function parseMedicines(text) {
+  if (!text) return [];
+  return text.split(/[,\s]+/).map(item => {
+    const name = item.replace(/\d+/g, "");
+    const qty = item.match(/\d+/)?.[0] || 1;
+    return { name, qty };
+  });
+}
+
+/* =============== MAIN ==================== */
+
+async function sendPrescription() {
+  const email = document.getElementById("patient-email").value.trim();
+  const rawText = voiceText || document.getElementById("medicine-input").value.trim();
+
+  if (!email) return alert("Enter patient email");
+  if (!rawText) return alert("Enter medicines");
+
+  const medicines = parseMedicines(rawText);
+
+  const payload = {
+    patientName: "Patient",
+    patientEmail: email,
+    medicines
+  };
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error();
+
+    // Generate SAME QR as backend
+    generateQR({
+      prescriptionId: data.prescriptionId,
+      medicines: medicines
+    });
+
+    alert("Prescription sent successfully");
+
+  } catch {
+    alert("Failed to send prescription");
+  }
+}
+
+/* =============== QR ====================== */
+
+function generateQR(payload) {
+  QRCode.toCanvas(
+    document.getElementById("qr-code"),
+    JSON.stringify(payload),
+    { width: 260 }
+  );
+}
+
+/* =============== CLEAR =================== */
+
+function clearAll() {
+  voiceText = "";
+  document.getElementById("medicine-input").value = "";
+  document.getElementById("patient-email").value = "";
+  document.getElementById("preview-text").textContent = "";
+  const ctx = document.getElementById("qr-code").getContext("2d");
+  ctx.clearRect(0, 0, 260, 260);
+}
+</script>
+
+</body>
+</html>
