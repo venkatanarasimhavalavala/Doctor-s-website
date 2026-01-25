@@ -1,6 +1,21 @@
 const { prescriptions } = require("../models/prescriptionModel");
+function updateExpiredPrescriptions() {
+  const now = new Date();
+
+  prescriptions.forEach(p => {
+    if (
+      p.expiryTime &&
+      new Date(p.expiryTime) < now &&
+      p.status === "READY"
+    ) {
+      p.motorSlot = null;
+      p.status = "EXPIRED";
+    }
+  });
+}
 
 exports.getAllPrescriptions = (req, res) => {
+  updateExpiredPrescriptions(); 
   res.json(prescriptions);
 };
 
