@@ -30,7 +30,7 @@ exports.createPrescription = async (req, res) => {
       secure: true,
       auth: {
         user: "valavalavenkatanarasimha@gmail.com",
-        pass: "tmsvmemdhkegfrjq"
+        pass: "oekvmejmmdwbweri"
       }
     });
 
